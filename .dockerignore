@@ -1,0 +1,15 @@
+.git
+.husky
+.vscode
+node_modules
+dist
+dist-ssr
+dist-electron
+release
+package
+tmp
+docs
+e2e
+*.log
+OpenIM_*
+open-im-sdk-core.*

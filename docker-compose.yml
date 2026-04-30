@@ -1,0 +1,17 @@
+services:
+  hubmessage-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hubmessage-web
+    image: hubmessage-web:local
+    restart: unless-stopped
+    ports:
+      - "18081:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
