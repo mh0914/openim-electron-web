@@ -2,6 +2,10 @@ import { t } from "i18next";
 import { FC } from "react";
 
 import { IMessageItemProps } from ".";
+import {
+  isSmartCustomerServiceThinkingMessage,
+  parseMessageContentText,
+} from "@/utils/smartCustomerService";
 import styles from "./message-item.module.scss";
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -15,7 +19,7 @@ const escapeHtml = (value: string) =>
     .replace(/'/g, "&#39;");
 
 const buildMentionHtml = (message: IMessageItemProps["message"]) => {
-  const text = message.atTextElem?.text ?? message.textElem?.content ?? "";
+  const text = parseMessageContentText(message);
   const atUsersInfo = message.atTextElem?.atUsersInfo ?? [];
 
   let content = escapeHtml(text);
@@ -39,6 +43,18 @@ const buildMentionHtml = (message: IMessageItemProps["message"]) => {
 };
 
 const TextMessageRender: FC<IMessageItemProps> = ({ message }) => {
+  if (isSmartCustomerServiceThinkingMessage(message)) {
+    return (
+      <div className={styles.bubble}>
+        <div className={styles["thinking-dots"]} aria-label="思考中">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </div>
+    );
+  }
+
   const content = buildMentionHtml(message);
 
   return (

@@ -22,6 +22,10 @@ import {
 import { useChatroomSelfNickname } from "../useChatroomSelfNickname";
 import {
   ChatroomBlackMember,
+  getChatroomVisitorAvatar,
+  getChatroomVisitorDisplayName,
+  getChatroomVisitorIdentity,
+  getChatroomVisitorLabel,
   parseGroupProfileExtra,
   stringifyGroupProfileExtra,
 } from "./groupProfileExtra";
@@ -71,8 +75,8 @@ const GroupMemberList: FC = () => {
     await getMemberData(true);
   }, [getMemberData]);
 
-  const blacklistedMembers =
-    parseGroupProfileExtra(currentGroupInfo?.ex).blacklistedMembers ?? [];
+  const profileExtra = parseGroupProfileExtra(currentGroupInfo?.ex);
+  const blacklistedMembers = profileExtra.blacklistedMembers ?? [];
 
   const saveBlacklistedMembers = useCallback(
     async (members: ChatroomBlackMember[]) => {
@@ -210,18 +214,38 @@ const GroupMemberList: FC = () => {
             Header: () => (fetchState.loading ? <Spin /> : null),
           }}
           itemContent={(_, member) => (
-            <MemberItem
-              currentRolevel={currentRolevel}
-              member={member}
-              selfDisplayName={
-                member.userID === selfUserID && selfNickname ? selfNickname : undefined
-              }
-              selfUserID={selfUserID}
-              onBlacklist={blacklistMember}
-              onKick={kickMember}
-              onToggleMute={toggleMute}
-              onUpdateRoleLevel={updateRoleLevel}
-            />
+            (() => {
+              const visitorIdentity = getChatroomVisitorIdentity(
+                profileExtra,
+                member.userID,
+                member.ex,
+              );
+              const visitorDisplayName = getChatroomVisitorDisplayName(
+                visitorIdentity,
+                member.userID === selfUserID && selfNickname
+                  ? selfNickname
+                  : member.nickname,
+              );
+
+              return (
+                <MemberItem
+                  currentRolevel={currentRolevel}
+                  member={member}
+                  visitorLabel={getChatroomVisitorLabel(visitorIdentity?.role)}
+                  displayName={visitorDisplayName}
+                  displayFaceURL={getChatroomVisitorAvatar(
+                    visitorIdentity,
+                    member.faceURL,
+                  )}
+                  isAnonymousVisitor={visitorIdentity?.role === "anonymous"}
+                  selfUserID={selfUserID}
+                  onBlacklist={blacklistMember}
+                  onKick={kickMember}
+                  onToggleMute={toggleMute}
+                  onUpdateRoleLevel={updateRoleLevel}
+                />
+              );
+            })()
           )}
         />
       )}
@@ -233,7 +257,10 @@ export default GroupMemberList;
 
 interface IMemberItemProps {
   member: GroupMemberItem;
-  selfDisplayName?: string;
+  displayName?: string;
+  displayFaceURL?: string;
+  visitorLabel?: string;
+  isAnonymousVisitor?: boolean;
   selfUserID: string;
   currentRolevel?: number;
   onKick: (member: GroupMemberItem) => Promise<void>;
@@ -245,7 +272,10 @@ interface IMemberItemProps {
 const MemberItem = memo(
   ({
     member,
-    selfDisplayName,
+    displayName,
+    displayFaceURL,
+    visitorLabel,
+    isAnonymousVisitor,
     selfUserID,
     currentRolevel,
     onKick,
@@ -270,9 +300,18 @@ const MemberItem = memo(
           className="flex items-center overflow-hidden"
           onClick={() => window.userClick(member.userID, member.groupID)}
         >
-          <OIMAvatar src={member.faceURL} text={member.nickname} />
+          <OIMAvatar
+            src={displayFaceURL ?? member.faceURL}
+            text={displayName || member.nickname}
+            bgColor={isAnonymousVisitor ? "#8c8c8c" : undefined}
+          />
           <div className="ml-3 flex min-w-0 items-center gap-2">
-            <div className="max-w-[120px] truncate">{selfDisplayName || member.nickname}</div>
+            <div className="max-w-[120px] truncate">{displayName || member.nickname}</div>
+            {visitorLabel && (
+              <span className="rounded border border-[#52c41a] px-1 text-xs text-[#52c41a]">
+                {visitorLabel}
+              </span>
+            )}
             {roleLabel && (
               <span
                 className={

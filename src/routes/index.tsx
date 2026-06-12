@@ -52,6 +52,13 @@ const router = createHashRouter([
           return { Component: Login };
         },
       },
+      {
+        path: "sso/login",
+        async lazy() {
+          const { SSOLogin } = await import("@/pages/sso/SSOLogin");
+          return { Component: SSOLogin };
+        },
+      },
     ],
   },
 ]);

@@ -147,6 +147,20 @@ export const useLogin = () => {
   );
 };
 
+export const getSSOAuthorizeURL = () =>
+  `${runtimeConfig.chatUrl.replace(/\/$/, "")}/sso/oauth2/authorize`;
+
+export const exchangeSSOTicket = async (ticket: string) =>
+  request.post<{ chatToken: string; imToken: string; userID: string }>(
+    "/sso/oauth2/ticket",
+    { ticket },
+    {
+      headers: {
+        operationID: uuidv4(),
+      },
+    },
+  );
+
 // Get user information
 export interface BusinessUserInfo {
   userID: string;

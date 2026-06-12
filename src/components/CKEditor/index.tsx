@@ -45,6 +45,7 @@ export interface MentionSelection {
 interface CKEditorProps {
   value: string;
   placeholder?: string;
+  disabled?: boolean;
   onChange?: (value: string) => void;
   mentionItems?: MentionFeedItem[];
   onMentionChange?: (mentions: MentionSelection[]) => void;
@@ -119,7 +120,15 @@ const appendPlainTextToHtml = (html: string, text: string) => {
 };
 
 const Index: ForwardRefRenderFunction<CKEditorRef, CKEditorProps> = (
-  { value, placeholder, onChange, mentionItems = [], onMentionChange, onEnter },
+  {
+    value,
+    placeholder,
+    disabled = false,
+    onChange,
+    mentionItems = [],
+    onMentionChange,
+    onEnter,
+  },
   ref,
 ) => {
   const ckEditor = useRef<ClassicEditor | null>(null);
@@ -128,6 +137,20 @@ const Index: ForwardRefRenderFunction<CKEditorRef, CKEditorProps> = (
   useEffect(() => {
     mentionItemsRef.current = mentionItems;
   }, [mentionItems]);
+
+  useEffect(() => {
+    const editor = ckEditor.current;
+    if (!editor) {
+      return;
+    }
+
+    if (disabled) {
+      editor.enableReadOnlyMode("chat-footer-disabled");
+      return;
+    }
+
+    editor.disableReadOnlyMode("chat-footer-disabled");
+  }, [disabled]);
 
   const focus = (moveToEnd = false) => {
     const editor = ckEditor.current;
@@ -226,6 +249,9 @@ const Index: ForwardRefRenderFunction<CKEditorRef, CKEditorProps> = (
           }
           data.preventDefault();
           evt.stop();
+          if (editor.isReadOnly) {
+            return;
+          }
           onEnter?.();
           return;
         }
@@ -294,6 +320,9 @@ const Index: ForwardRefRenderFunction<CKEditorRef, CKEditorProps> = (
       }}
       onReady={(editor) => {
         ckEditor.current = editor;
+        if (disabled) {
+          editor.enableReadOnlyMode("chat-footer-disabled");
+        }
         const mentionPlugin = editor.plugins.get("Mention");
 
         editor.conversion.for("upcast").elementToAttribute({

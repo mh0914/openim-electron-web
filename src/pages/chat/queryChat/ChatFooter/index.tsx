@@ -6,6 +6,7 @@ import {
   forwardRef,
   ForwardRefRenderFunction,
   memo,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -37,7 +38,9 @@ import {
 } from "../chatroom";
 import {
   formatMuteRemainDuration,
+  getChatroomVisitorIdentity,
   getChatroomMuteRemainSeconds,
+  isChatroomClosed,
   isChatroomTemporaryMuted,
   parseGroupProfileExtra,
 } from "../GroupSetting/groupProfileExtra";
@@ -93,12 +96,19 @@ const ChatFooter: ForwardRefRenderFunction<unknown, unknown> = (_, ref) => {
     () => parseGroupProfileExtra(currentGroupInfo?.ex),
     [currentGroupInfo?.ex],
   );
+  const chatroomClosed = isChatroomClosed(profileExtra);
   const temporaryMuted = isChatroomTemporaryMuted(profileExtra);
   const temporaryMuteRemainSeconds = getChatroomMuteRemainSeconds(profileExtra);
   const allMuted = isChatroomAllMuted(currentGroupInfo?.status);
   const isBlacklisted = Boolean(
     profileExtra.blacklistedMembers?.some((member) => member.userID === selfUserID),
   );
+  const visitorIdentity = getChatroomVisitorIdentity(
+    profileExtra,
+    selfUserID,
+    currentMemberInGroup?.ex,
+  );
+  const isVisitor = Boolean(visitorIdentity);
   const currentMuteEndTime = normalizeMuteEndTime(currentMemberInGroup?.muteEndTime);
 
   useEffect(() => {
@@ -161,6 +171,7 @@ const ChatFooter: ForwardRefRenderFunction<unknown, unknown> = (_, ref) => {
     groupStatus: currentGroupInfo?.status,
     profileExtra,
     isBlacklisted,
+    isVisitor,
   });
   const messageBlocked = Boolean(
     currentConversation?.groupID &&
@@ -170,20 +181,43 @@ const ChatFooter: ForwardRefRenderFunction<unknown, unknown> = (_, ref) => {
         groupStatus: currentGroupInfo?.status,
         profileExtra,
         isBlacklisted,
+        isVisitor,
       }),
   );
-  const chatroomMuteStatusText = allMuted
-    ? "聊天室当前处于全员禁言状态，仅创建者和管理员可发言"
-    : temporaryMuted
-      ? `聊天室当前处于临时禁言状态，剩余 ${formatMuteRemainDuration(temporaryMuteRemainSeconds)}，仅创建者和管理员可发言`
-      : "";
+  const chatroomMuteStatusText = chatroomClosed
+    ? "\u7fa4\u804a\u5df2\u5173\u95ed\uff0c\u6240\u6709\u4eba\u6682\u65f6\u65e0\u6cd5\u53d1\u8a00"
+    : allMuted
+      ? "聊天室当前处于全员禁言状态，仅创建者和管理员可发言"
+      : temporaryMuted
+        ? `聊天室当前处于临时禁言状态，剩余 ${formatMuteRemainDuration(temporaryMuteRemainSeconds)}，仅创建者和管理员可发言`
+        : "";
   const hideBlockedReasonWhenStatusShown =
     Boolean(chatroomMuteStatusText) &&
-    !isBlacklisted &&
-    !currentIsMuted &&
-    !canEditChatroomProfile(currentRolevel);
+    (chatroomClosed ||
+      (!isBlacklisted &&
+        !currentIsMuted &&
+        !isVisitor &&
+        !canEditChatroomProfile(currentRolevel)));
+
+  const guardedSendMessage = useCallback(
+    async (params: Parameters<typeof sendMessage>[0]) => {
+      if (messageBlocked) {
+        const reason =
+          blockedReason ||
+          "\u7fa4\u804a\u5df2\u5173\u95ed\uff0c\u6682\u65f6\u65e0\u6cd5\u53d1\u9001\u6d88\u606f";
+        feedbackToast({ msg: reason, error: reason });
+        throw new Error(reason);
+      }
+
+      await sendMessage(params);
+    },
+    [blockedReason, messageBlocked, sendMessage],
+  );
 
   const onChange = (value: string) => {
+    if (messageBlocked) {
+      return;
+    }
     setHtml(value);
   };
 
@@ -217,7 +251,7 @@ const ChatFooter: ForwardRefRenderFunction<unknown, unknown> = (_, ref) => {
 
   useEffect(() => {
     const handleInsertMention = ({ userID, displayName, isAll }: InsertMentionParams) => {
-      if (!currentConversation?.groupID) {
+      if (!currentConversation?.groupID || messageBlocked) {
         return;
       }
 
@@ -254,7 +288,7 @@ const ChatFooter: ForwardRefRenderFunction<unknown, unknown> = (_, ref) => {
     return () => {
       emitter.off("INSERT_MENTION", handleInsertMention);
     };
-  }, [currentConversation?.groupID, mentionItems]);
+  }, [currentConversation?.groupID, mentionItems, messageBlocked]);
 
   const buildAtPayload = (selectedMentions: MentionSelection[]) => {
     const hasAtAll = selectedMentions.some((item) => item.userId === AT_ALL_USER_ID);
@@ -309,7 +343,7 @@ const ChatFooter: ForwardRefRenderFunction<unknown, unknown> = (_, ref) => {
     setHtml("");
     setMentions([]);
 
-    sendMessage({ message });
+    await guardedSendMessage({ message });
   };
 
   return (
@@ -318,7 +352,7 @@ const ChatFooter: ForwardRefRenderFunction<unknown, unknown> = (_, ref) => {
         <SendActionBar
           disabled={messageBlocked}
           disabledReason={blockedReason}
-          sendMessage={sendMessage}
+          sendMessage={guardedSendMessage}
           getFileMessage={getFileMessage}
           getImageMessage={getImageMessage}
           getLocationMessage={getLocationMessage}
@@ -343,6 +377,7 @@ const ChatFooter: ForwardRefRenderFunction<unknown, unknown> = (_, ref) => {
               onChange={onChange}
               onEnter={enterToSend}
               onMentionChange={setMentions}
+              disabled={messageBlocked}
               value={html}
             />
           </div>

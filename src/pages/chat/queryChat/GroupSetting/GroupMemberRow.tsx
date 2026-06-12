@@ -10,7 +10,17 @@ import OIMAvatar from "@/components/OIMAvatar";
 import useGroupMembers from "@/hooks/useGroupMembers";
 import { emit } from "@/utils/events";
 
+import {
+  getChatroomVisitorAvatar,
+  getChatroomVisitorDisplayName,
+  getChatroomVisitorIdentity,
+  getChatroomVisitorLabel,
+  parseGroupProfileExtra,
+} from "./groupProfileExtra";
 import styles from "./group-setting.module.scss";
+
+const ownerLabel = "\u521b\u5efa\u8005";
+const adminLabel = "\u7ba1\u7406\u5458";
 
 const GroupMemberRow = ({
   currentGroupInfo,
@@ -22,6 +32,7 @@ const GroupMemberRow = ({
   updateTravel: () => void;
 }) => {
   const { fetchState, getMemberData, resetState } = useGroupMembers();
+  const profileExtra = parseGroupProfileExtra(currentGroupInfo.ex);
 
   useEffect(() => {
     if (currentGroupInfo?.groupID) {
@@ -30,7 +41,7 @@ const GroupMemberRow = ({
     return () => {
       resetState();
     };
-  }, [currentGroupInfo?.groupID]);
+  }, [currentGroupInfo?.groupID, getMemberData, resetState]);
 
   const sliceCount = isNomal ? 17 : 16;
 
@@ -57,29 +68,51 @@ const GroupMemberRow = ({
         <span className="ml-2">{currentGroupInfo?.memberCount}</span>
       </div>
       <div className="flex flex-wrap items-center">
-        {fetchState.groupMemberList.slice(0, sliceCount).map((member) => (
-          <div
-            key={member.userID}
-            title={member.nickname}
-            className={styles["member-item"]}
-            onClick={() => window.userClick(member.userID, member.groupID)}
-          >
-            <OIMAvatar src={member.faceURL} text={member.nickname} size={36} />
-            <div className="mt-2 min-h-[16px] max-w-full truncate text-xs">
-              {member.nickname}
-              {member.roleLevel === GroupMemberRole.Owner && (
-                <span className="ml-1 rounded border border-[#FF9831] px-1 text-[10px] text-[#FF9831]">
-                  创建者
-                </span>
-              )}
-              {member.roleLevel === GroupMemberRole.Admin && (
-                <span className="ml-1 rounded border border-[#2b7fff] px-1 text-[10px] text-[#2b7fff]">
-                  管理员
-                </span>
-              )}
+        {fetchState.groupMemberList.slice(0, sliceCount).map((member) => {
+          const visitorIdentity = getChatroomVisitorIdentity(
+            profileExtra,
+            member.userID,
+            member.ex,
+          );
+          const visitorLabel = getChatroomVisitorLabel(visitorIdentity?.role);
+          const displayName =
+            getChatroomVisitorDisplayName(visitorIdentity, member.nickname) ||
+            member.nickname;
+
+          return (
+            <div
+              key={member.userID}
+              title={displayName}
+              className={styles["member-item"]}
+              onClick={() => window.userClick(member.userID, member.groupID)}
+            >
+              <OIMAvatar
+                src={getChatroomVisitorAvatar(visitorIdentity, member.faceURL)}
+                text={displayName}
+                size={36}
+                bgColor={visitorIdentity?.role === "anonymous" ? "#8c8c8c" : undefined}
+              />
+              <div className="mt-2 min-h-[16px] max-w-full truncate text-xs">
+                {displayName}
+                {visitorLabel && (
+                  <span className="ml-1 rounded border border-[#52c41a] px-1 text-[10px] text-[#52c41a]">
+                    {visitorLabel}
+                  </span>
+                )}
+                {member.roleLevel === GroupMemberRole.Owner && (
+                  <span className="ml-1 rounded border border-[#FF9831] px-1 text-[10px] text-[#FF9831]">
+                    {ownerLabel}
+                  </span>
+                )}
+                {member.roleLevel === GroupMemberRole.Admin && (
+                  <span className="ml-1 rounded border border-[#2b7fff] px-1 text-[10px] text-[#2b7fff]">
+                    {adminLabel}
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div
           className={clsx(styles["member-item"], "cursor-pointer")}
           onClick={inviteMember}

@@ -27,6 +27,12 @@ import { isThisYear } from "date-fns";
 import { FileWithPath } from "@/pages/chat/queryChat/ChatFooter/SendActionBar/useFileMessage";
 import { IMSDK } from "@/layout/MainContentWrap";
 import { UploadFileParams } from "@openim/wasm-client-sdk/lib/types/params";
+import {
+  isSmartCustomerServiceThinkingMessage,
+  MARKDOWN_TEXT_MESSAGE_TYPE,
+  parseMessageContentText,
+} from "./smartCustomerService";
+import { parseRichCustomMessagePayload } from "./customMessage";
 dayjs.extend(calendar);
 dayjs.extend(relativeTime);
 dayjs.extend(updateLocale);
@@ -293,11 +299,16 @@ export const formatMessageByType = (message?: MessageItem): string => {
     return user.userID === selfUserID ? t("you") : user.nickname;
   };
   try {
+    if (isSmartCustomerServiceThinkingMessage(message)) {
+      return "思考中...";
+    }
     switch (message.contentType) {
       case MessageType.TextMessage:
-        return message.textElem!.content;
+        return parseMessageContentText(message);
       case MessageType.AtTextMessage:
-        return message.atTextElem?.text ?? "";
+        return parseMessageContentText(message);
+      case MARKDOWN_TEXT_MESSAGE_TYPE:
+        return parseMessageContentText(message);
       case MessageType.PictureMessage:
         return t("messageDescription.imageMessage");
       case MessageType.VoiceMessage:
@@ -314,6 +325,7 @@ export const formatMessageByType = (message?: MessageItem): string => {
         });
       case MessageType.CustomMessage:
         return (
+          parseRichCustomMessagePayload(message.customElem?.data)?.title ||
           message.customElem?.description ||
           t("messageDescription.customMessage")
         );

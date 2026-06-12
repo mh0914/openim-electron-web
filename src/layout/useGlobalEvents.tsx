@@ -28,6 +28,7 @@ import { useConversationStore, useUserStore } from "@/store";
 import { useContactStore } from "@/store/contact";
 import { feedbackToast } from "@/utils/common";
 import { initStore } from "@/utils/imCommon";
+import { installIMSyncFetchThrottle } from "@/utils/imSyncThrottle";
 import { clearIMProfile, getIMToken, getIMUserID } from "@/utils/storage";
 
 import { IMSDK } from "./MainContentWrap";
@@ -92,6 +93,7 @@ export function useGlobalEvent() {
   );
 
   useEffect(() => {
+    installIMSyncFetchThrottle();
     loginCheck();
     setIMListener();
     setIpcListener();

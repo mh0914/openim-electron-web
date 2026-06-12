@@ -1,9 +1,14 @@
 import { t } from "i18next";
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import login_bg from "@/assets/images/login/login_bg.png";
 import WindowControlBar from "@/components/WindowControlBar";
-import { getLoginMethod, setLoginMethod as saveLoginMethod } from "@/utils/storage";
+import {
+  clearIMProfile,
+  getLoginMethod,
+  setLoginMethod as saveLoginMethod,
+} from "@/utils/storage";
 
 import styles from "./index.module.scss";
 import LoginForm from "./LoginForm";
@@ -16,11 +21,18 @@ export const Login = () => {
   // 0login 1resetPassword 2register
   const [formType, setFormType] = useState<FormType>(0);
   const [loginMethod, setLoginMethod] = useState<"phone" | "email">(getLoginMethod());
+  const [searchParams] = useSearchParams();
 
   const updateLoginMethod = useCallback((method: "phone" | "email") => {
     setLoginMethod(method);
     saveLoginMethod(method);
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("ssoLogout") === "1") {
+      clearIMProfile();
+    }
+  }, [searchParams]);
 
   return (
     <div className="relative flex h-full flex-col">

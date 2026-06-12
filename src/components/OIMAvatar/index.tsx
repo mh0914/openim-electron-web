@@ -14,6 +14,7 @@ interface IOIMAvatarProps extends AvatarProps {
   bgColor?: string;
   isgroup?: boolean;
   isnotification?: boolean;
+  disabled?: boolean;
   size?: number;
 }
 
@@ -92,6 +93,7 @@ const OIMAvatar: React.FC<IOIMAvatarProps> = (props) => {
     bgColor = "#0289FA",
     isgroup = false,
     isnotification,
+    disabled = false,
     style,
     className,
     ...restProps
@@ -121,6 +123,8 @@ const OIMAvatar: React.FC<IOIMAvatarProps> = (props) => {
     minHeight: `${size}px`,
     lineHeight: `${size - 2}px`,
     color,
+    filter: disabled ? "grayscale(1)" : undefined,
+    opacity: disabled ? 0.55 : undefined,
     ...(style ?? {}),
   };
 

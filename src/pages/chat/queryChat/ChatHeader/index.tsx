@@ -15,6 +15,10 @@ import { useConversationStore, useUserStore } from "@/store";
 import { emit } from "@/utils/events";
 
 import GroupSetting from "../GroupSetting";
+import {
+  isChatroomClosed,
+  parseGroupProfileExtra,
+} from "../GroupSetting/groupProfileExtra";
 import SingleSetting from "../SingleSetting";
 
 const menuList = [
@@ -107,6 +111,7 @@ const ChatHeader = () => {
 
   const isSingleSession = currentConversation?.conversationType === SessionType.Single;
   const isGroupSession = currentConversation?.conversationType === SessionType.Group;
+  const chatroomClosed = isChatroomClosed(parseGroupProfileExtra(currentGroupInfo?.ex));
 
   return (
     <Layout.Header className="relative !h-[60px] border-b border-b-[var(--gap-text)] !bg-white !px-4">
@@ -121,6 +126,11 @@ const ChatHeader = () => {
               <div className="truncate text-base font-semibold">
                 {currentConversation?.showName}
               </div>
+              {isGroupSession && chatroomClosed && (
+                <span className="shrink-0 rounded bg-[#fff1f0] px-2 py-0.5 text-xs font-medium text-[#ff4d4f]">
+                  {"\u7fa4\u804a\u5173\u95ed"}
+                </span>
+              )}
               {isSingleSession &&
                 currentConversationSmartServiceUserSet.has(
                   currentConversation?.userID ?? "",

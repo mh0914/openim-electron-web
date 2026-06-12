@@ -1,6 +1,10 @@
 import { GroupMemberRole, GroupStatus, MessageType } from "@openim/wasm-client-sdk";
 
-import { GroupProfileExtra, isChatroomTemporaryMuted } from "./GroupSetting/groupProfileExtra";
+import {
+  GroupProfileExtra,
+  isChatroomClosed,
+  isChatroomTemporaryMuted,
+} from "./GroupSetting/groupProfileExtra";
 
 export type HistoryFilterType =
   | "all"
@@ -83,18 +87,28 @@ export const isChatroomSpeakBlocked = ({
   groupStatus,
   profileExtra,
   isBlacklisted,
+  isVisitor,
 }: {
   currentRoleLevel?: number;
   currentMuteEndTime?: number;
   groupStatus?: number;
   profileExtra?: GroupProfileExtra;
   isBlacklisted?: boolean;
+  isVisitor?: boolean;
 }) => {
+  if (isChatroomClosed(profileExtra)) {
+    return true;
+  }
+
   if (isBlacklisted) {
     return true;
   }
 
   if (isMemberMuted(currentMuteEndTime)) {
+    return true;
+  }
+
+  if (isVisitor) {
     return true;
   }
 
@@ -111,19 +125,29 @@ export const getChatroomSpeakBlockedReason = ({
   groupStatus,
   profileExtra,
   isBlacklisted,
+  isVisitor,
 }: {
   currentRoleLevel?: number;
   currentMuteEndTime?: number;
   groupStatus?: number;
   profileExtra?: GroupProfileExtra;
   isBlacklisted?: boolean;
+  isVisitor?: boolean;
 }) => {
+  if (isChatroomClosed(profileExtra)) {
+    return "\u7fa4\u804a\u5df2\u5173\u95ed\uff0c\u6682\u65f6\u65e0\u6cd5\u53d1\u9001\u6d88\u606f";
+  }
+
   if (isBlacklisted) {
     return "你已被聊天室拉黑，无法进入或发送消息";
   }
 
   if (isMemberMuted(currentMuteEndTime)) {
     return "你已被聊天室禁言，暂时无法发送消息";
+  }
+
+  if (isVisitor) {
+    return "\u6e38\u5ba2\u548c\u533f\u540d\u6e38\u5ba2\u9ed8\u8ba4\u88ab\u7981\u8a00\uff0c\u6682\u65f6\u65e0\u6cd5\u53d1\u9001\u6d88\u606f";
   }
 
   if (canEditChatroomProfile(currentRoleLevel)) {

@@ -4,7 +4,7 @@ import md5 from "md5";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { useLogin, useSendSms } from "@/api/login";
+import { getSSOAuthorizeURL, useLogin, useSendSms } from "@/api/login";
 import { IS_SKIP_SMS_VERIFY } from "@/config";
 import {
   getEmail,
@@ -318,6 +318,12 @@ const LoginForm = ({ loginMethod, setFormType, updateLoginMethod }: LoginFormPro
         <Form.Item className="mb-4">
           <Button type="primary" htmlType="submit" block loading={loginLoading}>
             {t("placeholder.login")}
+          </Button>
+        </Form.Item>
+
+        <Form.Item className="mb-4">
+          <Button block onClick={() => (window.location.href = getSSOAuthorizeURL())}>
+            主系统登录
           </Button>
         </Form.Item>
 

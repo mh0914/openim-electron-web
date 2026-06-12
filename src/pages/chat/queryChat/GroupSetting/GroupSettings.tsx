@@ -1,4 +1,4 @@
-import { GroupStatus } from "@openim/wasm-client-sdk";
+import { GroupMemberRole, GroupStatus } from "@openim/wasm-client-sdk";
 import { RightOutlined } from "@ant-design/icons";
 import { Button, Divider, Empty, Input, Switch, Upload } from "antd";
 import clsx from "clsx";
@@ -16,6 +16,7 @@ import { useCurrentMemberRole } from "@/hooks/useCurrentMemberRole";
 import { feedbackToast } from "@/utils/common";
 import { emit } from "@/utils/events";
 import { IMSDK } from "@/layout/MainContentWrap";
+import { useConversationStore, useUserStore } from "@/store";
 import { uploadFile } from "@/utils/imCommon";
 
 import { canEditChatroomProfile } from "../chatroom";
@@ -23,11 +24,15 @@ import { FileWithPath } from "../ChatFooter/SendActionBar/useFileMessage";
 import GroupMemberRow from "./GroupMemberRow";
 import {
   ChatroomBlackMember,
+  ChatroomVisitorRole,
   formatMuteRemainDuration,
   formatNotificationUpdateTime,
   getChatroomMuteRemainSeconds,
+  getChatroomVisitorIdentity,
   isChatroomTemporaryMuted,
+  isChatroomClosed,
   parseGroupProfileExtra,
+  stringifyGroupMemberVisitorRole,
   stringifyGroupProfileExtra,
 } from "./groupProfileExtra";
 import { useGroupSettings } from "./useGroupSettings";
@@ -94,6 +99,11 @@ const openInputModal = ({
     });
   });
 
+const CHATROOM_CLOSED_LABEL = "\u7fa4\u804a\u5173\u95ed";
+const CLOSE_CHATROOM_TEXT = "\u5173\u95ed\u804a\u5929\u5ba4";
+const OPEN_CHATROOM_TEXT = "\u6253\u5f00\u804a\u5929\u5ba4";
+const CHATROOM_OPENED_NOTICE = "\u7fa4\u804a\u5df2\u5f00\u653e";
+
 const GroupSettings = ({
   updateTravel,
   closeOverlay,
@@ -101,10 +111,21 @@ const GroupSettings = ({
   updateTravel: () => void;
   closeOverlay: () => void;
 }) => {
-  const { isNomal, isOwner, isJoinGroup, currentRolevel } = useCurrentMemberRole();
+  const { isNomal, isOwner, isJoinGroup, currentRolevel, currentMemberInGroup } =
+    useCurrentMemberRole();
 
-  const { currentGroupInfo, syncGroupInfo, updateGroupInfo, tryQuitGroup, tryDismissGroup } =
+  const { currentGroupInfo, syncGroupInfo, updateGroupInfo, tryQuitGroup } =
     useGroupSettings({ closeOverlay });
+  const setCurrentMemberInGroup = useConversationStore(
+    (state) => state.setCurrentMemberInGroup,
+  );
+  const setCurrentGroupMemberList = useConversationStore(
+    (state) => state.setCurrentGroupMemberList,
+  );
+  const currentGroupMemberList = useConversationStore(
+    (state) => state.currentGroupMemberList,
+  );
+  const selfUserID = useUserStore((state) => state.selfInfo.userID);
 
   const [, copyToClipboard] = useCopyToClipboard();
 
@@ -114,6 +135,12 @@ const GroupSettings = ({
   );
   const blacklistedMembers = profileExtra.blacklistedMembers ?? [];
   const hasPermissions = canEditChatroomProfile(currentRolevel);
+  const chatroomClosed = isChatroomClosed(profileExtra);
+  const visitorIdentity = getChatroomVisitorIdentity(
+    profileExtra,
+    selfUserID,
+    currentMemberInGroup?.ex,
+  );
   const temporaryMuted = isChatroomTemporaryMuted(profileExtra);
   const temporaryMuteRemainSeconds = getChatroomMuteRemainSeconds(profileExtra);
   const temporaryMuteStatusText = temporaryMuted
@@ -153,6 +180,124 @@ const GroupSettings = ({
     },
     [updateGroupEx],
   );
+
+  const updateSelfVisitorRole = useCallback(
+    async (role?: ChatroomVisitorRole) => {
+      if (!currentGroupInfo || !currentMemberInGroup?.userID) {
+        return;
+      }
+
+      if (currentMemberInGroup.roleLevel !== GroupMemberRole.Normal) {
+        feedbackToast({
+          msg: "\u53ea\u6709\u666e\u901a\u6210\u5458\u53ef\u4ee5\u8bbe\u7f6e\u6e38\u5ba2\u8eab\u4efd",
+          error: "\u53ea\u6709\u666e\u901a\u6210\u5458\u53ef\u4ee5\u8bbe\u7f6e\u6e38\u5ba2\u8eab\u4efd",
+        });
+        return;
+      }
+
+      try {
+        const nextEx = stringifyGroupMemberVisitorRole(currentMemberInGroup.ex, role);
+        await IMSDK.setGroupMemberInfo({
+          groupID: currentMemberInGroup.groupID,
+          userID: currentMemberInGroup.userID,
+          ex: nextEx,
+        });
+
+        const nextMember = {
+          ...currentMemberInGroup,
+          ex: nextEx,
+        };
+        setCurrentMemberInGroup(nextMember);
+        setCurrentGroupMemberList(
+          currentGroupMemberList.map((member) =>
+            member.userID === nextMember.userID && member.groupID === nextMember.groupID
+              ? nextMember
+              : member,
+          ),
+        );
+        feedbackToast({
+          msg: role
+            ? role === "anonymous"
+              ? "\u5df2\u8bbe\u7f6e\u4e3a\u533f\u540d\u6e38\u5ba2"
+              : "\u5df2\u8bbe\u7f6e\u4e3a\u6e38\u5ba2"
+            : "\u5df2\u6062\u590d\u4e3a\u666e\u901a\u6210\u5458",
+        });
+      } catch (error) {
+        feedbackToast({ error, msg: "\u8bbe\u7f6e\u6e38\u5ba2\u8eab\u4efd\u5931\u8d25" });
+      }
+    },
+    [
+      currentGroupInfo,
+      currentGroupMemberList,
+      currentMemberInGroup,
+      setCurrentGroupMemberList,
+      setCurrentMemberInGroup,
+    ],
+  );
+
+  const sendChatroomOpenedNotice = useCallback(async () => {
+    if (!currentGroupInfo?.groupID) {
+      return;
+    }
+
+    try {
+      const { data: message } = await IMSDK.createTextMessage(CHATROOM_OPENED_NOTICE);
+      await IMSDK.sendMessage({
+        recvID: "",
+        groupID: currentGroupInfo.groupID,
+        message,
+      });
+    } catch (error) {
+      feedbackToast({ error, msg: "\u7fa4\u804a\u5df2\u6253\u5f00\uff0c\u4f46\u901a\u77e5\u53d1\u9001\u5931\u8d25" });
+    }
+  }, [currentGroupInfo?.groupID]);
+
+  const toggleChatroomClosed = useCallback(() => {
+    if (!currentGroupInfo || !isOwner) {
+      return;
+    }
+
+    const nextClosed = !chatroomClosed;
+    modal.confirm({
+      title: nextClosed ? CLOSE_CHATROOM_TEXT : OPEN_CHATROOM_TEXT,
+      content: nextClosed
+        ? "\u5173\u95ed\u540e\uff0c\u7fa4\u4e3b\u3001\u7ba1\u7406\u5458\u548c\u7fa4\u6210\u5458\u90fd\u4e0d\u80fd\u53d1\u8a00\u3002"
+        : "\u6253\u5f00\u540e\uff0c\u7fa4\u804a\u5c06\u6062\u590d\u6b63\u5e38\uff0c\u5e76\u5411\u7fa4\u4e2d\u53d1\u9001\u901a\u77e5\u3002",
+      okText: nextClosed ? CLOSE_CHATROOM_TEXT : OPEN_CHATROOM_TEXT,
+      cancelText: t("cancel"),
+      okButtonProps: {
+        danger: nextClosed,
+        type: "primary",
+      },
+      onOk: async () => {
+        try {
+          await updateGroupEx({
+            chatroomClosed: nextClosed,
+            chatroomClosedAt: nextClosed ? Date.now() : 0,
+            chatroomClosedBy: nextClosed ? selfUserID : "",
+          });
+          feedbackToast({
+            msg: nextClosed ? "\u5df2\u5173\u95ed\u804a\u5929\u5ba4" : "\u5df2\u6253\u5f00\u804a\u5929\u5ba4",
+          });
+          if (!nextClosed) {
+            await sendChatroomOpenedNotice();
+          }
+        } catch (error) {
+          feedbackToast({
+            error,
+            msg: nextClosed ? "\u5173\u95ed\u804a\u5929\u5ba4\u5931\u8d25" : "\u6253\u5f00\u804a\u5929\u5ba4\u5931\u8d25",
+          });
+        }
+      },
+    });
+  }, [
+    chatroomClosed,
+    currentGroupInfo,
+    isOwner,
+    selfUserID,
+    sendChatroomOpenedNotice,
+    updateGroupEx,
+  ]);
 
   const toggleTemporaryMute = useCallback(
     async (checked: boolean) => {
@@ -377,6 +522,7 @@ const GroupSettings = ({
                 isgroup
                 src={currentGroupInfo?.faceURL}
                 text={currentGroupInfo?.groupName}
+                disabled={chatroomClosed}
               />
               {hasPermissions && (
                 <img
@@ -395,6 +541,11 @@ const GroupSettings = ({
             editable={hasPermissions}
             onChange={updateGroupName}
           />
+          {chatroomClosed && (
+            <span className="ml-2 rounded bg-[#fff1f0] px-2 py-0.5 text-xs text-[#ff4d4f]">
+              {CHATROOM_CLOSED_LABEL}
+            </span>
+          )}
         </div>
       </div>
 
@@ -407,6 +558,42 @@ const GroupSettings = ({
         />
       )}
       <Divider className="m-0 border-4 border-[#F4F5F7]" />
+
+      {isJoinGroup && isNomal && (
+        <>
+          <SettingRow title={"\u6211\u7684\u7fa4\u5185\u89d2\u8272"}>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                size="small"
+                type={!visitorIdentity ? "primary" : "default"}
+                onClick={() => void updateSelfVisitorRole()}
+              >
+                {"\u666e\u901a\u6210\u5458"}
+              </Button>
+              <Button
+                size="small"
+                type={visitorIdentity?.role === "visitor" ? "primary" : "default"}
+                onClick={() => void updateSelfVisitorRole("visitor")}
+              >
+                {"\u6e38\u5ba2"}
+              </Button>
+              <Button
+                size="small"
+                type={visitorIdentity?.role === "anonymous" ? "primary" : "default"}
+                onClick={() => void updateSelfVisitorRole("anonymous")}
+              >
+                {"\u533f\u540d\u6e38\u5ba2"}
+              </Button>
+            </div>
+          </SettingRow>
+          {visitorIdentity && (
+            <div className="px-4 pb-3 text-xs text-[#fa8c16]">
+              {"\u6e38\u5ba2\u548c\u533f\u540d\u6e38\u5ba2\u9ed8\u8ba4\u88ab\u7981\u8a00"}
+            </div>
+          )}
+          <Divider className="m-0 border-4 border-[#F4F5F7]" />
+        </>
+      )}
 
       <SettingRow className="pb-2" title={`${t("placeholder.group")}ID`}>
         <div className="flex items-center">
@@ -638,8 +825,17 @@ const GroupSettings = ({
               {t("placeholder.exitGroup")}
             </Button>
           ) : (
-            <Button type="primary" danger onClick={tryDismissGroup}>
-              {t("placeholder.disbandGroup")}
+            <Button
+              type="primary"
+              danger={!chatroomClosed}
+              className={
+                chatroomClosed
+                  ? "border-[#52c41a] bg-[#52c41a] hover:!border-[#73d13d] hover:!bg-[#73d13d]"
+                  : undefined
+              }
+              onClick={toggleChatroomClosed}
+            >
+              {chatroomClosed ? OPEN_CHATROOM_TEXT : CLOSE_CHATROOM_TEXT}
             </Button>
           )}
         </div>

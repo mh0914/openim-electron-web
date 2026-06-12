@@ -22,6 +22,9 @@ export const MainContentWrap = () => {
 
   useEffect(() => {
     const loginCheck = async () => {
+      if (location.pathname === "/login" || location.pathname === "/sso/login") {
+        return;
+      }
       const IMToken = await getIMToken();
       const IMUserID = await getIMUserID();
       if (!IMToken || !IMUserID) {

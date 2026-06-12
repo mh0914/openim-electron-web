@@ -1,5 +1,6 @@
 import {
   AudioOutlined,
+  IdcardOutlined,
   EnvironmentOutlined,
   FileOutlined,
   HistoryOutlined,
@@ -16,6 +17,7 @@ import image from "@/assets/images/chatFooter/image.png";
 
 import { MAX_VOICE_MESSAGE_DURATION } from "../limits";
 import { SendMessageParams } from "../useSendMessage";
+import CustomMessageModal from "./CustomMessageModal";
 import LocationPickerModal from "./LocationPickerModal";
 import { FileWithPath, LocationDraft } from "./useFileMessage";
 
@@ -94,6 +96,7 @@ const SendActionBar = ({
 }) => {
   const { t } = useTranslation();
   const [locationOpen, setLocationOpen] = useState(false);
+  const [customMessageOpen, setCustomMessageOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -361,12 +364,26 @@ const SendActionBar = ({
         key: "location",
         onClick: () => setLocationOpen(true),
       },
+      {
+        type: "click",
+        title: "自定义消息",
+        icon: <IdcardOutlined className={iconClassName} />,
+        key: "custom-message",
+        onClick: () => {
+          if (guardDisabled()) {
+            return;
+          }
+          setCustomMessageOpen(true);
+        },
+      },
     ],
     [
       getFileMessage,
       getImageMessage,
       getLocationMessage,
       getVideoMessage,
+      disabled,
+      disabledReason,
       isRecording,
       t,
     ],
@@ -426,6 +443,11 @@ const SendActionBar = ({
         onCancel={() => setLocationOpen(false)}
         onSubmit={handleLocationSubmit}
         open={locationOpen}
+      />
+      <CustomMessageModal
+        open={customMessageOpen}
+        onCancel={() => setCustomMessageOpen(false)}
+        sendMessage={sendMessage}
       />
     </>
   );

@@ -11,7 +11,11 @@ export interface GroupProfileExtra {
   updateNotificationTime?: string;
   notificationEventExtra?: string;
   temporaryMuteUntil?: number;
+  chatroomClosed?: boolean;
+  chatroomClosedAt?: number;
+  chatroomClosedBy?: string;
   blacklistedMembers?: ChatroomBlackMember[];
+  visitorMembers?: ChatroomVisitorMember[];
 }
 
 export interface GroupProfileDraft extends GroupProfileExtra {
@@ -26,7 +30,21 @@ export interface ChatroomBlackMember {
   faceURL?: string;
 }
 
+export type ChatroomVisitorRole = "visitor" | "anonymous";
+
+export interface ChatroomVisitorMember {
+  userID: string;
+  nickname?: string;
+  faceURL?: string;
+  role: ChatroomVisitorRole;
+  updatedAt?: number;
+}
+
 type GroupExtraRecord = Record<string, unknown> & GroupProfileExtra;
+type MemberExtraRecord = Record<string, unknown> & {
+  chatroomVisitorRole?: ChatroomVisitorRole | "";
+  chatroomVisitorUpdatedAt?: number;
+};
 
 const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -70,6 +88,12 @@ export const parseGroupProfileExtra = (rawEx?: string): GroupProfileExtra => {
           : "",
       temporaryMuteUntil:
         typeof parsed.temporaryMuteUntil === "number" ? parsed.temporaryMuteUntil : 0,
+      chatroomClosed:
+        typeof parsed.chatroomClosed === "boolean" ? parsed.chatroomClosed : false,
+      chatroomClosedAt:
+        typeof parsed.chatroomClosedAt === "number" ? parsed.chatroomClosedAt : 0,
+      chatroomClosedBy:
+        typeof parsed.chatroomClosedBy === "string" ? parsed.chatroomClosedBy : "",
       blacklistedMembers: Array.isArray(parsed.blacklistedMembers)
         ? parsed.blacklistedMembers
             .filter(isObjectRecord)
@@ -77,6 +101,21 @@ export const parseGroupProfileExtra = (rawEx?: string): GroupProfileExtra => {
               userID: typeof item.userID === "string" ? item.userID : "",
               nickname: typeof item.nickname === "string" ? item.nickname : "",
               faceURL: typeof item.faceURL === "string" ? item.faceURL : "",
+            }))
+            .filter((item) => Boolean(item.userID))
+        : [],
+      visitorMembers: Array.isArray(parsed.visitorMembers)
+        ? parsed.visitorMembers
+            .filter(isObjectRecord)
+            .map((item) => ({
+              userID: typeof item.userID === "string" ? item.userID : "",
+              nickname: typeof item.nickname === "string" ? item.nickname : "",
+              faceURL: typeof item.faceURL === "string" ? item.faceURL : "",
+              role:
+                item.role === "visitor" || item.role === "anonymous"
+                  ? item.role
+                  : "visitor",
+              updatedAt: typeof item.updatedAt === "number" ? item.updatedAt : 0,
             }))
             .filter((item) => Boolean(item.userID))
         : [],
@@ -115,6 +154,54 @@ export const stringifyGroupProfileExtra = (
   return JSON.stringify(next);
 };
 
+export const parseGroupMemberVisitorRole = (
+  rawEx?: string,
+): ChatroomVisitorRole | undefined => {
+  if (!rawEx) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(rawEx);
+    if (!isObjectRecord(parsed)) {
+      return undefined;
+    }
+
+    return parsed.chatroomVisitorRole === "visitor" ||
+      parsed.chatroomVisitorRole === "anonymous"
+      ? parsed.chatroomVisitorRole
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+export const stringifyGroupMemberVisitorRole = (
+  rawEx: string | undefined,
+  role?: ChatroomVisitorRole,
+) => {
+  let base: MemberExtraRecord = {};
+
+  if (rawEx) {
+    try {
+      const parsed = JSON.parse(rawEx);
+      if (isObjectRecord(parsed)) {
+        base = parsed as MemberExtraRecord;
+      }
+    } catch {
+      base = {};
+    }
+  }
+
+  const next: MemberExtraRecord = {
+    ...base,
+    chatroomVisitorRole: role ?? "",
+    chatroomVisitorUpdatedAt: Date.now(),
+  };
+
+  return JSON.stringify(next);
+};
+
 export const formatNotificationUpdateTime = (
   notificationUpdateTime?: number,
   customNotificationUpdateTime?: string,
@@ -132,6 +219,51 @@ export const formatNotificationUpdateTime = (
 
 export const isChatroomTemporaryMuted = (extra?: GroupProfileExtra) =>
   (extra?.temporaryMuteUntil ?? 0) > Date.now();
+
+export const isChatroomClosed = (extra?: GroupProfileExtra) =>
+  Boolean(extra?.chatroomClosed);
+
+export const getChatroomVisitorIdentity = (
+  extra: GroupProfileExtra | undefined,
+  userID?: string,
+  memberEx?: string,
+) => {
+  if (!userID) {
+    return undefined;
+  }
+
+  const memberRole = parseGroupMemberVisitorRole(memberEx);
+  if (memberRole) {
+    return {
+      userID,
+      role: memberRole,
+    } satisfies ChatroomVisitorMember;
+  }
+
+  return extra?.visitorMembers?.find((member) => member.userID === userID);
+};
+
+export const getChatroomVisitorLabel = (role?: ChatroomVisitorRole) => {
+  if (role === "anonymous") {
+    return "\u533f\u540d\u6e38\u5ba2";
+  }
+
+  if (role === "visitor") {
+    return "\u6e38\u5ba2";
+  }
+
+  return "";
+};
+
+export const getChatroomVisitorDisplayName = (
+  visitor: ChatroomVisitorMember | undefined,
+  fallbackName?: string,
+) => (visitor?.role === "anonymous" ? "\u533f\u540d" : fallbackName);
+
+export const getChatroomVisitorAvatar = (
+  visitor: ChatroomVisitorMember | undefined,
+  fallbackFaceURL?: string,
+) => (visitor?.role === "anonymous" ? "" : fallbackFaceURL);
 
 export const getChatroomMuteRemainSeconds = (extra?: GroupProfileExtra) =>
   Math.max(0, Math.ceil(((extra?.temporaryMuteUntil ?? 0) - Date.now()) / 1000));

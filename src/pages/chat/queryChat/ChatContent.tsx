@@ -13,6 +13,13 @@ import emitter from "@/utils/events";
 
 import MessageItem from "./MessageItem";
 import NotificationMessage from "./NotificationMessage";
+import {
+  getChatroomVisitorAvatar,
+  getChatroomVisitorDisplayName,
+  getChatroomVisitorIdentity,
+  getChatroomVisitorLabel,
+  parseGroupProfileExtra,
+} from "./GroupSetting/groupProfileExtra";
 import { useChatroomSelfNickname } from "./useChatroomSelfNickname";
 import { useHistoryMessageList } from "./useHistoryMessageList";
 
@@ -20,8 +27,13 @@ const ChatContent = () => {
   const virtuoso = useRef<VirtuosoHandle>(null);
   const selfUserID = useUserStore((state) => state.selfInfo.userID);
   const currentConversation = useConversationStore((state) => state.currentConversation);
+  const currentGroupInfo = useConversationStore((state) => state.currentGroupInfo);
   const currentGroupMemberList = useConversationStore((state) => state.currentGroupMemberList);
   const { selfNickname } = useChatroomSelfNickname(currentConversation?.groupID);
+  const profileExtra = useMemo(
+    () => parseGroupProfileExtra(currentGroupInfo?.ex),
+    [currentGroupInfo?.ex],
+  );
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -41,6 +53,11 @@ const ChatContent = () => {
       new Map(
         currentGroupMemberList.map((member) => [member.userID, member.roleLevel] as const),
       ),
+    [currentGroupMemberList],
+  );
+  const memberExMap = useMemo(
+    () =>
+      new Map(currentGroupMemberList.map((member) => [member.userID, member.ex] as const)),
     [currentGroupMemberList],
   );
   const operatorUserSet = usePlatformOperators(
@@ -103,6 +120,15 @@ const ChatContent = () => {
               );
             }
             const isSender = selfUserID === message.sendID;
+            const visitorIdentity = getChatroomVisitorIdentity(
+              profileExtra,
+              message.sendID,
+              memberExMap.get(message.sendID),
+            );
+            const senderName = getChatroomVisitorDisplayName(
+              visitorIdentity,
+              isSender && selfNickname ? selfNickname : undefined,
+            );
             return (
               <MessageItem
                 key={message.clientMsgID}
@@ -111,7 +137,12 @@ const ChatContent = () => {
                 messageUpdateFlag={message.senderNickname + message.senderFaceUrl}
                 isSender={isSender}
                 senderRoleLevel={memberRoleMap.get(message.sendID)}
-                displaySenderName={isSender && selfNickname ? selfNickname : undefined}
+                displaySenderName={senderName}
+                displaySenderFaceURL={getChatroomVisitorAvatar(
+                  visitorIdentity,
+                  message.senderFaceUrl,
+                )}
+                visitorRoleLabel={getChatroomVisitorLabel(visitorIdentity?.role)}
                 isPlatformOperator={operatorUserSet.has(message.sendID)}
                 isSmartCustomerService={smartCustomerServiceUserSet.has(message.sendID)}
               />

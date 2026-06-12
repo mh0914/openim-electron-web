@@ -15,6 +15,7 @@ import OIMAvatar from "@/components/OIMAvatar";
 import PlatformOperatorBadge from "@/components/PlatformOperatorBadge";
 import { IMSDK } from "@/layout/MainContentWrap";
 import { useConversationStore, useUserStore } from "@/store";
+import { useContactStore } from "@/store/contact";
 import { feedbackToast } from "@/utils/common";
 import {
   conversationSort,
@@ -22,6 +23,10 @@ import {
   getConversationAtLabel,
   getConversationContent,
 } from "@/utils/imCommon";
+import {
+  isChatroomClosed,
+  parseGroupProfileExtra,
+} from "../queryChat/GroupSetting/groupProfileExtra";
 
 import styles from "./conversation-item.module.scss";
 
@@ -48,6 +53,7 @@ const ConversationItem = ({
   const removeConversation = useConversationStore((state) => state.removeConversation);
   const getUnReadCountByReq = useConversationStore((state) => state.getUnReadCountByReq);
   const conversationList = useConversationStore((state) => state.conversationList);
+  const groupList = useContactStore((state) => state.groupList);
   const currentUser = useUserStore((state) => state.selfInfo.userID);
   const deleteLabel = "删除";
   const deleteConversationConfirmText = "确认删除该会话及本地聊天记录吗？";
@@ -89,6 +95,14 @@ const ConversationItem = ({
 
   const latestMessageTime = formatConversionTime(conversation.latestMsgSendTime);
   const atLabel = getConversationAtLabel(conversation.groupAtType);
+  const currentGroup = useMemo(
+    () =>
+      conversation.groupID
+        ? groupList.find((group) => group.groupID === conversation.groupID)
+        : undefined,
+    [conversation.groupID, groupList],
+  );
+  const chatroomClosed = isChatroomClosed(parseGroupProfileExtra(currentGroup?.ex));
   const shouldShowOfficialBadge = isPlatformOperator;
   const shouldShowSmartCustomerServiceBadge = isSmartCustomerService;
   const contextMenuItems: MenuProps["items"] = [
@@ -147,6 +161,7 @@ const ConversationItem = ({
           src={conversation.faceURL}
           isgroup={Boolean(conversation.groupID)}
           text={conversation.showName}
+          disabled={chatroomClosed}
         />
       </Badge>
 
@@ -154,6 +169,11 @@ const ConversationItem = ({
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <div className="min-w-0 truncate font-medium">{conversation.showName}</div>
+            {chatroomClosed && (
+              <span className="shrink-0 rounded bg-[#fff1f0] px-1.5 py-0.5 text-[10px] leading-none text-[#ff4d4f]">
+                {"\u7fa4\u804a\u5173\u95ed"}
+              </span>
+            )}
             {shouldShowSmartCustomerServiceBadge && (
               <PlatformOperatorBadge
                 variant="customerService"

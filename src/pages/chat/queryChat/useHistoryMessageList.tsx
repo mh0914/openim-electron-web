@@ -5,6 +5,11 @@ import { useParams } from "react-router-dom";
 
 import { IMSDK } from "@/layout/MainContentWrap";
 import emitter, { emit } from "@/utils/events";
+import {
+  getMessageConversationID,
+  isSmartCustomerServiceThinkingMessage,
+  pruneSettledSmartThinkingMessages,
+} from "@/utils/smartCustomerService";
 
 const START_INDEX = 10000;
 const SPLIT_COUNT = 20;
@@ -40,10 +45,23 @@ export function useHistoryMessageList() {
       ) {
         return;
       }
-      setLoadState((preState) => ({
-        ...preState,
-        messageList: [...preState.messageList, message],
-      }));
+      setLoadState((preState) => {
+        const nextList = isSmartCustomerServiceThinkingMessage(message)
+          ? [...preState.messageList, message]
+          : [
+            ...preState.messageList.filter(
+              (item) =>
+                !isSmartCustomerServiceThinkingMessage(item) ||
+                item.sendID !== message.sendID ||
+                getMessageConversationID(item) !== getMessageConversationID(message),
+            ),
+            message,
+          ];
+        return {
+          ...preState,
+          messageList: nextList,
+        };
+      });
     };
     const updateOneMessage = (message: MessageItem) => {
       setLoadState((preState) => {
@@ -87,7 +105,10 @@ export function useHistoryMessageList() {
           ...preState,
           initLoading: false,
           hasMoreOld: !data.isEnd,
-          messageList: [...data.messageList, ...(loadMore ? preState.messageList : [])],
+          messageList: pruneSettledSmartThinkingMessages([
+            ...data.messageList,
+            ...(loadMore ? preState.messageList : []),
+          ]),
           firstItemIndex: preState.firstItemIndex - data.messageList.length,
         })),
       );

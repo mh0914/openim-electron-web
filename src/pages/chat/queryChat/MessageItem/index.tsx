@@ -11,8 +11,13 @@ import OIMAvatar from "@/components/OIMAvatar";
 import PlatformOperatorBadge from "@/components/PlatformOperatorBadge";
 import { formatMessageTime } from "@/utils/imCommon";
 import { emit } from "@/utils/events";
+import {
+  isSmartCustomerServiceThinkingMessage,
+  MARKDOWN_TEXT_MESSAGE_TYPE,
+} from "@/utils/smartCustomerService";
 
 import CatchMessageRender from "./CatchMsgRenderer";
+import CustomMessageRender from "./CustomMessageRender";
 import FileMessageRender from "./FileMessageRender";
 import LocationMessageRender from "./LocationMessageRender";
 import MediaMessageRender from "./MediaMessageRender";
@@ -31,6 +36,8 @@ export interface IMessageItemProps {
   messageUpdateFlag?: string;
   senderRoleLevel?: number;
   displaySenderName?: string;
+  displaySenderFaceURL?: string;
+  visitorRoleLabel?: string;
   isPlatformOperator?: boolean;
   isSmartCustomerService?: boolean;
 }
@@ -43,6 +50,8 @@ const components: Record<number, FC<IMessageItemProps>> = {
   [MessageType.VideoMessage]: VideoMessageRender,
   [MessageType.FileMessage]: FileMessageRender,
   [MessageType.LocationMessage]: LocationMessageRender,
+  [MessageType.CustomMessage]: CustomMessageRender,
+  [MARKDOWN_TEXT_MESSAGE_TYPE]: TextMessageRender,
 };
 
 const MessageItem: FC<IMessageItemProps> = ({
@@ -52,19 +61,24 @@ const MessageItem: FC<IMessageItemProps> = ({
   conversationID,
   senderRoleLevel,
   displaySenderName,
+  displaySenderFaceURL,
+  visitorRoleLabel,
   isPlatformOperator,
   isSmartCustomerService,
 }) => {
   const messageWrapRef = useRef<HTMLDivElement>(null);
   const [showMessageMenu, setShowMessageMenu] = useState(false);
-  const MessageRenderComponent = components[message.contentType] || CatchMessageRender;
+  const MessageRenderComponent = isSmartCustomerServiceThinkingMessage(message)
+    ? TextMessageRender
+    : components[message.contentType] || CatchMessageRender;
 
   const closeMessageMenu = useCallback(() => {
     setShowMessageMenu(false);
   }, []);
 
   const canShowMessageMenu = !disabled;
-  const mentionName = (displaySenderName || message.senderNickname || message.sendID)?.trim();
+  const senderDisplayName = displaySenderName || message.senderNickname;
+  const mentionName = (senderDisplayName || message.sendID)?.trim();
   const canInsertMention = Boolean(message.groupID && !isSender && message.sendID && mentionName);
 
   const handleInsertMention = useCallback(
@@ -102,8 +116,9 @@ const MessageItem: FC<IMessageItemProps> = ({
         >
           <OIMAvatar
             size={36}
-            src={message.senderFaceUrl}
-            text={message.senderNickname}
+            src={displaySenderFaceURL ?? message.senderFaceUrl}
+            text={senderDisplayName}
+            bgColor={visitorRoleLabel === "\u533f\u540d\u6e38\u5ba2" ? "#8c8c8c" : undefined}
             style={{ cursor: canInsertMention ? "context-menu" : undefined }}
             onContextMenu={handleInsertMention}
           />
@@ -111,15 +126,27 @@ const MessageItem: FC<IMessageItemProps> = ({
           <div className={styles["message-wrap"]} ref={messageWrapRef}>
             <div className={styles["message-profile"]}>
               <div
-                title={message.senderNickname}
+                title={senderDisplayName}
                 className={clsx(
                   "min-w-0 max-w-[120px] shrink truncate text-[var(--sub-text)]",
                 )}
                 style={{ cursor: canInsertMention ? "context-menu" : undefined }}
                 onContextMenu={handleInsertMention}
               >
-                {displaySenderName || message.senderNickname}
+                {senderDisplayName}
               </div>
+              {visitorRoleLabel && (
+                <span
+                  className={clsx(
+                    "rounded border px-1 text-[10px]",
+                    visitorRoleLabel === "\u533f\u540d\u6e38\u5ba2"
+                      ? "border-[#8c8c8c] text-[#8c8c8c]"
+                      : "border-[#52c41a] text-[#52c41a]",
+                  )}
+                >
+                  {visitorRoleLabel}
+                </span>
+              )}
               {isSmartCustomerService && (
                 <PlatformOperatorBadge
                   variant="customerService"
